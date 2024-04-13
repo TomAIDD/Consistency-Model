@@ -1,8 +1,47 @@
-
+import os
+from os.path import dirname
+import yaml
+import argparse
 import torch
 import math
 import torch.nn as nn
 import numpy as np
+
+class LoadFromFile(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if values.name.endswith("yaml") or values.name.endswith("yml"):
+            with values as f:
+                config = yaml.load(f, Loader=yaml.FullLoader)
+            for key in config.keys():
+                if key not in namespace:
+                    raise ValueError(f"Unknown argument in config file: {key}")
+            namespace.__dict__.update(config)
+        else:
+            raise ValueError("Configuration file must end with yaml or yml")
+
+
+class LoadFromCheckpoint(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        ckpt = torch.load(values, map_location="cpu")
+        config = ckpt["hyper_parameters"]
+        for key in config.keys():
+            if key not in namespace:
+                raise ValueError(f"Unknown argument in the model checkpoint: {key}")
+        namespace.__dict__.update(config)
+        namespace.__dict__.update(load_model=values)
+
+
+def save_argparse(args, filename, exclude=None):
+    os.makedirs(dirname(filename), exist_ok=True)
+    if filename.endswith("yaml") or filename.endswith("yml"):
+        if isinstance(exclude, str):
+            exclude = [exclude]
+        args = args.__dict__.copy()
+        for exl in exclude:
+            del args[exl]
+        yaml.dump(args, open(filename, "w"))
+    else:
+        raise ValueError("Configuration file should end with yaml or yml")
 
 
 def append_dims(x, target_dims):

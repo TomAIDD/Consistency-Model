@@ -1,22 +1,81 @@
 
+import os
+import argparse
 from tqdm import tqdm
-
 from cm.cm import ConsistencyModel
 from cm.toy_tasks.data_generator import DataGenerator
 from cm.visualization.vis_utils import plot_main_figure
+from cm.utils import save_argparse, LoadFromFile
 
 """
 Continuous training of the consistency model on a toy task.
 For better performance, one can pre-training the model with the karras diffusion objective
 and then use the weights as initialization for the consistency model.
 """
+def get_args():
+    parser = argparse.ArgumentParser(description="CT_continuous")
+    parser.add_argument(
+        "--conf", "-c", type=open, action=LoadFromFile, help="Configuration yaml file"
+    )  # keep second
 
-if __name__ == "__main__":
+    parser.add_argument(
+        "--device",
+        default='cpu',
+        type=str,
+        help="Device to use for training",
+    )
 
-    device = 'cpu'
-    use_pretraining = True
-    n_sampling_steps = 20
+    parser.add_argument(
+        "--n-sampling-steps",
+        default=20,
+        type=int,
+        help="Number of sampling steps for the multi-step sampler",
+    )
+
+    parser.add_argument(
+        "--task",
+        default='three_gmm_1D',
+        type=str,
+        help="Toy task to train on",
+        choices=['three_gmm_1D', 'uneven_two_gmm_1D', 'two_gmm_1D', 'single_gaussian_1D'],
+    )
     
+    parser.add_argument(
+        "--use-pretraining",
+        action='store_true',
+        help="Use pretraining with the karras diffusion objective",
+    )
+
+    parser.add_argument(
+        "--train-epochs", 
+        default=2000, 
+        type=int, 
+        help="Number of training epochs"
+    
+    )
+
+    parser.add_argument(
+        "--log-dir", 
+        default='logs',
+        type=str, 
+        help="Directory to save logs"
+    )
+
+    args = parser.parse_args()
+
+    save_argparse(args, os.path.join(args.log_dir, "input.yaml"), exclude=["conf"])
+
+    return args
+
+def main():
+    args = get_args()
+
+    device = args.device
+    use_pretraining = args.use_pretraining
+    n_sampling_steps = args.n_sampling_steps
+    
+    os.makedirs(os.path.join(args.log_dir, 'plots'), exist_ok=True)
+
     cm = ConsistencyModel(
         lr=1e-4,
         sampler_type='onestep',
@@ -32,9 +91,9 @@ if __name__ == "__main__":
         n_sampling_steps=n_sampling_steps,
         use_karras_noise_conditioning=True,    
     )
-    train_epochs = 2000
+    train_epochs = args.train_epochs
     # chose one of the following toy tasks: 'three_gmm_1D' 'uneven_two_gmm_1D' 'two_gmm_1D' 'single_gaussian_1D'
-    data_manager = DataGenerator('three_gmm_1D') 
+    data_manager = DataGenerator(args.task) 
     samples, cond = data_manager.generate_samples(10000)
     samples = samples.reshape(-1, 1).to(device)
     pbar = tqdm(range(train_epochs))
@@ -55,7 +114,7 @@ if __name__ == "__main__":
             train_epochs, 
             sampling_method='euler', 
             x_range=[-4, 4], 
-            save_path='./plots',
+            save_path = os.path.join(args.log_dir, 'plots'),
             n_sampling_steps=n_sampling_steps,
         )
         
@@ -78,7 +137,7 @@ if __name__ == "__main__":
         train_epochs, 
         sampling_method='onestep', 
         x_range=[-4, 4], 
-        save_path='./plots'
+        save_path = os.path.join(args.log_dir, 'plots')
     )
     plot_main_figure(
         data_manager.compute_log_prob, 
@@ -88,6 +147,10 @@ if __name__ == "__main__":
         sampling_method='multistep', 
         n_sampling_steps=n_sampling_steps,
         x_range=[-4, 4], 
-        save_path='./plots'
+        save_path = os.path.join(args.log_dir, 'plots')
     )
     print('done')
+
+
+if __name__ == "__main__":
+    main()

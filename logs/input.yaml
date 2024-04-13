@@ -1,0 +1,6 @@
+device: cpu
+log_dir: logs
+n_sampling_steps: 20
+task: three_gmm_1D
+train_epochs: 2000
+use_pretraining: true
